@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PEPE Live" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <title>PEPE Live</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #0b1220; color: #e8eefc; display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      width: min(420px, 100%); background: #141c2e; border: 1px solid #2a3550;
+      border-radius: 18px; padding: 24px 22px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
+    }
+    h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #9aabc8; letter-spacing: .02em; }
+    .status { font-size: 12px; color: #6d7f9c; margin-bottom: 18px; }
+    .pro { font-size: 28px; font-weight: 800; margin: 8px 0 14px; letter-spacing: .2px; }
+    .pro.up { color: #3dda8a; }
+    .pro.down { color: #ff6b6b; }
+    .row { font-size: 22px; font-weight: 700; margin: 10px 0; }
+    .meta { margin-top: 18px; font-size: 12px; line-height: 1.55; color: #7a8ba8; }
+    button {
+      margin-top: 16px; width: 100%; border: 0; border-radius: 12px; padding: 12px 14px;
+      background: #1f6feb; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+    }
+    button.secondary { background: #243049; color: #d7e0f2; margin-top: 8px; }
+    button:disabled { opacity: .55; cursor: default; }
+    .err { color: #ff8e8e; font-size: 13px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>PEPE live · Binance</h1>
+    <div class="status" id="status">Loading…</div>
+    <div class="pro up" id="proLine">—</div>
+    <div class="row" id="pepeLine">🟢 PEPE —</div>
+    <div class="row" id="bagLine">💰 Bag : PKR —K</div>
+    <div class="meta" id="meta">
+      Buy 468 → sell 550 (=100%) · Target = (short − 468) / 82 × 100<br>
+      Auto-refresh every 30s
+    </div>
+    <button id="notifBtn" type="button">Enable alerts</button>
+    <button id="refreshBtn" class="secondary" type="button">Refresh now</button>
+    <div class="err" id="err" hidden></div>
+  </div>
+  <script>
+    const COINS = 177322500;
+    const BUY = 468;
+    const SELL = 550;
+    const SPAN = SELL - BUY; // 82
+    const BINANCE = [
+      'https://data-api.binance.vision/api/v3/ticker/price?symbol=PEPEUSDT',
+      'https://api1.binance.com/api/v3/ticker/price?symbol=PEPEUSDT',
+      'https://api.binance.com/api/v3/ticker/price?symbol=PEPEUSDT'
+    ];
+    const FX = 'https://open.er-api.com/v6/latest/USD';
+
+    async function fetchPrice() {
+      let lastErr;
+      for (const url of BINANCE) {
+        try {
+          const r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const j = await r.json();
+          return parseFloat(j.price);
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('Binance failed');
+    }
+
+    async function fetchPkr() {
+      const r = await fetch(FX, { cache: 'no-store' });
+      if (!r.ok) throw new Error('FX HTTP ' + r.status);
+      const j = await r.json();
+      return parseFloat(j.rates.PKR);
+    }
+
+    function fmtTarget(t) {
+      const s = (t >= 0 ? '+' : '') + t.toFixed(1);
+      return s;
+    }
+
+    function maybeNotify(target, proK) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const now = Date.now();
+      const lastSell = Number(localStorage.getItem('pepe_last_sell_alert') || 0);
+      const lastPro = Number(localStorage.getItem('pepe_last_pro10_alert') || 0);
+      if (target >= 100 && now - lastSell > 3600000) {
+        new Notification('PEPE sell target hit', { body: 'Target ≥ 100% (short ≥ 550). Consider selling.', icon: 'icon-192.png' });
+        localStorage.setItem('pepe_last_sell_alert', String(now));
+      }
+      // re-arm style: notify once when Pro crosses back above 10k after being below — optional first-hit
+      if (proK >= 10 && now - lastPro > 3600000) {
+        const armed = localStorage.getItem('pepe_pro10_armed') === '1';
+        if (armed) {
+          new Notification('PEPE Pro above 10k', { body: 'Pro is ' + proK + 'k again.', icon: 'icon-192.png' });
+          localStorage.setItem('pepe_last_pro10_alert', String(now));
+          localStorage.setItem('pepe_pro10_armed', '0');
+        }
+      }
+      if (proK < 10) localStorage.setItem('pepe_pro10_armed', '1');
+    }
+
+    async function refresh() {
+      const err = document.getElementById('err');
+      const status = document.getElementById('status');
+      err.hidden = true;
+      try {
+        const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
+        const short = Math.round(price * 1e8);
+        const bag = COINS * price * pkr;
+        const profit = (price - BUY / 1e8) * COINS * pkr;
+        const proK = Math.round(profit / 1000);
+        const target = ((short - BUY) / SPAN) * 100;
+        const bagK = Math.floor(bag / 1000);
+        const up = proK >= 0;
+        const proEl = document.getElementById('proLine');
+        proEl.className = 'pro ' + (up ? 'up' : 'down');
+        proEl.textContent = (up ? '🟢' : '🔴') + ' Pro:' + proK + 'k/🎯:' + fmtTarget(target) + '%';
+        document.getElementById('pepeLine').textContent = '🟢 PEPE ' + short;
+        document.getElementById('bagLine').textContent = '💰 Bag : PKR ' + bagK + 'K';
+        document.getElementById('meta').innerHTML =
+          'Buy 468 → sell 550 (=100%) · Target = (short − 468) / 82 × 100<br>' +
+          'Binance ' + price + ' · USD/PKR ' + pkr.toFixed(2) + '<br>' +
+          'Updated ' + new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }) + ' PKT';
+        status.textContent = 'Live · refreshes every 30s';
+        maybeNotify(target, proK);
+      } catch (e) {
+        err.hidden = false;
+        err.textContent = 'Update failed: ' + (e && e.message ? e.message : e);
+        status.textContent = 'Offline / error';
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refresh);
+    document.getElementById('notifBtn').addEventListener('click', async () => {
+      if (!('Notification' in window)) {
+        alert('Notifications not supported on this browser.');
+        return;
+      }
+      const p = await Notification.requestPermission();
+      document.getElementById('notifBtn').textContent =
+        p === 'granted' ? 'Alerts on' : (p === 'denied' ? 'Alerts blocked' : 'Enable alerts');
+      if (p === 'granted') {
+        localStorage.setItem('pepe_pro10_armed', '1');
+        new Notification('PEPE alerts enabled', { body: 'Will ping at Target 100% (550) and Pro re-cross 10k.', icon: 'icon-192.png' });
+      }
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+    if ('Notification' in window && Notification.permission === 'granted') {
+      document.getElementById('notifBtn').textContent = 'Alerts on';
+    }
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>
