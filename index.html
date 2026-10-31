@@ -180,6 +180,7 @@
         tEl.textContent = (target >= 0 ? '+' : '') + target.toFixed(1) + '%';
 
         document.getElementById('bagVal').textContent = 'PKR ' + bagK + 'K';
+        document.title = 'Profit PKR ' + proK + 'K · PEPE ' + short;
         renderSideAndGrand();
       } catch (e) {
         err.hidden = false;
