@@ -21,15 +21,25 @@
     }
     .card {
       width: min(420px, 100%); background: #141c2e; border: 1px solid #2a3550;
-      border-radius: 18px; padding: 20px 18px 18px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
+      border-radius: 18px; padding: 22px 18px 18px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
     }
-    h1 { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #9aabc8; letter-spacing: .02em; text-align: center; }
-    .grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    .pepe-top {
+      text-align: center; margin: 0 0 18px;
+    }
+    .pepe-top .word {
+      font-size: 13px; font-weight: 700; color: #7a8ba8; letter-spacing: .12em;
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+    .pepe-top .num {
+      font-size: 48px; font-weight: 900; line-height: 1.05; letter-spacing: -0.02em;
+      color: #e8eefc;
+    }
+    .row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
     }
     .cell {
       background: #0f1728; border: 1px solid #2a3550; border-radius: 14px;
-      padding: 16px 12px; text-align: center; min-height: 92px;
+      padding: 16px 12px; text-align: center; min-height: 88px;
       display: flex; flex-direction: column; justify-content: center; gap: 6px;
     }
     .label { font-size: 12px; color: #7a8ba8; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
@@ -37,13 +47,16 @@
     .value.up { color: #3dda8a; }
     .value.down { color: #ff6b6b; }
     .value.neutral { color: #e8eefc; }
-    .err { color: #ff8e8e; font-size: 13px; margin-top: 12px; text-align: center; }
+    .err { color: #ff8e8e; font-size: 13px; margin-top: 8px; text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>PEPE Live · Binance</h1>
-    <div class="grid">
+    <div class="pepe-top">
+      <div class="word">PEPE</div>
+      <div class="num" id="pepeVal">—</div>
+    </div>
+    <div class="row">
       <div class="cell">
         <div class="label">Pro</div>
         <div class="value up" id="proVal">—</div>
@@ -52,13 +65,15 @@
         <div class="label">Target</div>
         <div class="value neutral" id="targetVal">—</div>
       </div>
-      <div class="cell">
-        <div class="label">PEPE</div>
-        <div class="value neutral" id="pepeVal">—</div>
-      </div>
+    </div>
+    <div class="row">
       <div class="cell">
         <div class="label">Bag</div>
         <div class="value neutral" id="bagVal">—</div>
+      </div>
+      <div class="cell">
+        <div class="label">Side Pro</div>
+        <div class="value up" id="sideVal">—</div>
       </div>
     </div>
     <div class="err" id="err" hidden></div>
@@ -102,19 +117,29 @@
         const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
         const short = Math.round(price * 1e8);
         const bag = COINS * price * pkr;
-        const profit = (price - BUY / 1e8) * COINS * pkr;
-        const proK = Math.round(profit / 1000);
+        const profitPkr = (price - BUY / 1e8) * COINS * pkr;
+        const profitUsd = (price - BUY / 1e8) * COINS;
+        const proK = Math.round(profitPkr / 1000);
+        const sideK = Math.round(profitUsd); // whole USD
         const target = ((short - BUY) / SPAN) * 100;
         const bagK = Math.floor(bag / 1000);
         const up = proK >= 0;
+
+        document.getElementById('pepeVal').textContent = String(short);
+
         const proEl = document.getElementById('proVal');
         proEl.className = 'value ' + (up ? 'up' : 'down');
         proEl.textContent = 'PKR ' + proK + 'K';
+
         const tEl = document.getElementById('targetVal');
         tEl.className = 'value ' + (target >= 0 ? 'up' : 'down');
         tEl.textContent = (target >= 0 ? '+' : '') + target.toFixed(1) + '%';
-        document.getElementById('pepeVal').textContent = String(short);
+
         document.getElementById('bagVal').textContent = 'PKR ' + bagK + 'K';
+
+        const sEl = document.getElementById('sideVal');
+        sEl.className = 'value ' + (sideK >= 0 ? 'up' : 'down');
+        sEl.textContent = '$' + sideK;
       } catch (e) {
         err.hidden = false;
         err.textContent = 'Update failed';
