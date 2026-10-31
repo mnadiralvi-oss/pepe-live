@@ -109,7 +109,7 @@
         const up = proK >= 0;
         const proEl = document.getElementById('proVal');
         proEl.className = 'value ' + (up ? 'up' : 'down');
-        proEl.textContent = (up ? '' : '') + proK + 'k';
+        proEl.textContent = 'PKR ' + proK + 'K';
         const tEl = document.getElementById('targetVal');
         tEl.className = 'value ' + (target >= 0 ? 'up' : 'down');
         tEl.textContent = (target >= 0 ? '+' : '') + target.toFixed(1) + '%';
