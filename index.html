@@ -21,120 +21,37 @@
     }
     .card {
       width: min(420px, 100%); background: #141c2e; border: 1px solid #2a3550;
-      border-radius: 18px; padding: 22px 18px 18px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
+      border-radius: 18px; padding: 28px 24px; box-shadow: 0 16px 48px rgba(0,0,0,.45);
     }
-    .pepe-top { text-align: center; margin: 0 0 18px; }
-    .pepe-top .word {
-      font-size: 13px; font-weight: 700; color: #7a8ba8; letter-spacing: .12em;
-      text-transform: uppercase; margin-bottom: 4px;
+    h1 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: #9aabc8; letter-spacing: .04em; text-transform: uppercase; }
+    .block {
+      margin: 14px 0 0; font-size: 26px; font-weight: 800; line-height: 1.45;
+      white-space: pre-wrap; letter-spacing: .2px;
     }
-    .pepe-top .num {
-      font-size: 48px; font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; color: #e8eefc;
-    }
-    .row {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
-    }
-    .row.full { grid-template-columns: 1fr; }
-    .cell {
-      background: #0f1728; border: 1px solid #2a3550; border-radius: 14px;
-      padding: 16px 12px; text-align: center; min-height: 88px;
-      display: flex; flex-direction: column; justify-content: center; gap: 6px;
-    }
-    .cell.grand { border-color: #3dda8a55; background: #0f1f18; }
-    .label { font-size: 12px; color: #7a8ba8; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-    .value { font-size: 22px; font-weight: 800; line-height: 1.15; word-break: break-word; }
-    .value.up { color: #3dda8a; }
-    .value.down { color: #ff6b6b; }
-    .value.neutral { color: #e8eefc; }
-    .side-input {
-      width: 100%; margin-top: 4px; border: 1px solid #2a3550; border-radius: 10px;
-      background: #141c2e; color: #e8eefc; font-size: 16px; font-weight: 700;
-      padding: 8px 10px; text-align: center; outline: none;
-    }
-    .side-input:focus { border-color: #3dda8a88; }
-    .hint { font-size: 11px; color: #6d7f9c; margin-top: 2px; }
-    .err { color: #ff8e8e; font-size: 13px; margin-top: 8px; text-align: center; }
+    .block.up { color: #3dda8a; }
+    .block.down { color: #ff6b6b; }
+    .meta { margin-top: 18px; font-size: 12px; line-height: 1.55; color: #7a8ba8; }
+    .err { color: #ff8e8e; font-size: 13px; margin-top: 10px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="pepe-top">
-      <div class="word">PEPE</div>
-      <div class="num" id="pepeVal">—</div>
-    </div>
-    <div class="row">
-      <div class="cell">
-        <div class="label">Profit</div>
-        <div class="value up" id="proVal">—</div>
-      </div>
-      <div class="cell">
-        <div class="label">Target</div>
-        <div class="value neutral" id="targetVal">—</div>
-      </div>
-    </div>
-    <div class="row">
-      <div class="cell">
-        <div class="label">Bag</div>
-        <div class="value neutral" id="bagVal">—</div>
-        <div class="hint">PEPE only · no side</div>
-      </div>
-      <div class="cell">
-        <div class="label">Side Pro</div>
-        <div class="value up" id="sideVal">PKR 0K</div>
-        <input class="side-input" id="sideInput" type="number" inputmode="decimal" step="1" placeholder="PKR amount" />
-        <div class="hint">Manual · PKR</div>
-      </div>
-    </div>
-    <div class="row full">
-      <div class="cell grand">
-        <div class="label">Grand Total</div>
-        <div class="value up" id="grandVal">—</div>
-        <div class="hint">Bag + Side Pro</div>
-      </div>
-    </div>
+    <h1>PEPE live · buy-back</h1>
+    <pre class="block up" id="block">Loading…</pre>
+    <div class="meta" id="meta">Sell 510 → buy-back 470 (=100%) · Target = (510 − short) / 40 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
     <div class="err" id="err" hidden></div>
   </div>
   <script>
     const COINS = 177322500;
-    const BUY = 468;
-    const SELL = 550;
-    const SPAN = SELL - BUY;
-    const SIDE_KEY = 'pepe_side_pro_pkr';
+    const FROM = 510;
+    const TO = 470;
+    const SPAN = FROM - TO;
     const BINANCE = [
       'https://data-api.binance.vision/api/v3/ticker/price?symbol=PEPEUSDT',
       'https://api1.binance.com/api/v3/ticker/price?symbol=PEPEUSDT',
       'https://api.binance.com/api/v3/ticker/price?symbol=PEPEUSDT'
     ];
     const FX = 'https://open.er-api.com/v6/latest/USD';
-
-    let lastBag = 0;
-
-    function getSidePkr() {
-      const n = Number(localStorage.getItem(SIDE_KEY) || '0');
-      return Number.isFinite(n) ? n : 0;
-    }
-
-    function renderSideAndGrand() {
-      const side = getSidePkr();
-      const sideK = Math.round(side / 1000);
-      const sideEl = document.getElementById('sideVal');
-      sideEl.className = 'value ' + (sideK >= 0 ? 'up' : 'down');
-      sideEl.textContent = 'PKR ' + sideK + 'K';
-      const grand = lastBag + side;
-      const grandK = Math.floor(grand / 1000);
-      const gEl = document.getElementById('grandVal');
-      gEl.className = 'value ' + (grand >= 0 ? 'up' : 'down');
-      gEl.textContent = 'PKR ' + grandK + 'K';
-    }
-
-    const sideInput = document.getElementById('sideInput');
-    const saved = getSidePkr();
-    if (saved) sideInput.value = String(saved);
-    sideInput.addEventListener('input', () => {
-      const v = Number(sideInput.value);
-      localStorage.setItem(SIDE_KEY, String(Number.isFinite(v) ? v : 0));
-      renderSideAndGrand();
-    });
 
     async function fetchPrice() {
       let lastErr;
@@ -162,26 +79,25 @@
       try {
         const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
         const short = Math.round(price * 1e8);
-        const bag = COINS * price * pkr; // PEPE bag only — side NOT included
-        const profitPkr = (price - BUY / 1e8) * COINS * pkr;
-        const proK = Math.round(profitPkr / 1000);
-        const target = ((short - BUY) / SPAN) * 100;
+        const bag = COINS * price * pkr;
+        const proPkr = (FROM / 1e8 - price) * COINS * pkr;
+        const proK = Math.round(proPkr / 1000);
+        const target = ((FROM - short) / SPAN) * 100;
         const bagK = Math.floor(bag / 1000);
-        lastBag = bag;
-
-        document.getElementById('pepeVal').textContent = String(short);
-
-        const proEl = document.getElementById('proVal');
-        proEl.className = 'value ' + (proK >= 0 ? 'up' : 'down');
-        proEl.textContent = 'PKR ' + proK + 'K';
-
-        const tEl = document.getElementById('targetVal');
-        tEl.className = 'value ' + (target >= 0 ? 'up' : 'down');
-        tEl.textContent = (target >= 0 ? '+' : '') + target.toFixed(1) + '%';
-
-        document.getElementById('bagVal').textContent = 'PKR ' + bagK + 'K';
-        document.title = 'Profit PKR ' + proK + 'K · PEPE ' + short;
-        renderSideAndGrand();
+        const neg = proK < 0;
+        const emoji = neg ? '🔴' : '🟢';
+        const targetStr = (target >= 0 ? '+' : '') + target.toFixed(1);
+        const text =
+          emoji + ' Pro:' + proK + 'k/🎯:' + targetStr + '%\n' +
+          '🟢 PEPE ' + short + '\n' +
+          '💰 Bag : PKR ' + bagK + 'K';
+        const block = document.getElementById('block');
+        block.className = 'block ' + (neg ? 'down' : 'up');
+        block.textContent = text;
+        document.title = 'Pro ' + proK + 'k · PEPE ' + short;
+        document.getElementById('meta').innerHTML =
+          'Sell 510 → buy-back 470 (=100%) · Target = (510 − short) / 40 × 100<br>' +
+          'Binance PEPE/USDT ' + price + ' · updated just now';
       } catch (e) {
         err.hidden = false;
         err.textContent = 'Update failed';
@@ -191,7 +107,6 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
-    renderSideAndGrand();
     refresh();
     setInterval(refresh, 1500);
   </script>
