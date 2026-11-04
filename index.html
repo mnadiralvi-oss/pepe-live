@@ -84,7 +84,7 @@
         const proK = Math.round(proPkr / 1000);
         const target = ((FROM - short) / SPAN) * 100;
         const bagK = Math.floor(bag / 1000);
-        const neg = proK < 0;
+        const neg = target < 0; // red when Target % negative (short above 510)
         const emoji = neg ? '🔴' : '🟢';
         const targetStr = (target >= 0 ? '+' : '') + target.toFixed(1);
         const text =
