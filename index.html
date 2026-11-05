@@ -36,16 +36,26 @@
 </head>
 <body>
   <div class="card">
-    <h1>PEPE live · buy-back</h1>
+    <h1>PEPE live · hold</h1>
     <pre class="block up" id="block">Loading…</pre>
-    <div class="meta" id="meta">Sell 510 → buy-back 470 (=100%) · Target = (510 − short) / 40 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
+    <div class="meta" id="meta">Hold 178,321,500 @ 471 → sell 510 (=100%) · Target = (short − 471) / 39 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
     <div class="err" id="err" hidden></div>
   </div>
   <script>
-    const COINS = 177322500;
-    const FROM = 510;
-    const TO = 470;
-    const SPAN = FROM - TO;
+    const COINS = 178321500;
+    const BUY = 471;
+    const SELL = 510;
+    const SPAN = SELL - BUY; // 39
+    const COST = 232331.99;
+    let hitTarget = false, above10k = null;
+    function notify(msg) {
+      try {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+          navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r => r ? r.showNotification('PEPE Live', { body: msg, icon: 'icon-192.png' }) : new Notification('PEPE Live', { body: msg })).catch(() => new Notification('PEPE Live', { body: msg }));
+        } else if (Notification.permission === 'default') Notification.requestPermission();
+      } catch (e) {}
+    }
     const BINANCE = [
       'https://data-api.binance.vision/api/v3/ticker/price?symbol=PEPEUSDT',
       'https://api1.binance.com/api/v3/ticker/price?symbol=PEPEUSDT',
@@ -80,12 +90,16 @@
         const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
         const short = Math.round(price * 1e8);
         const bag = COINS * price * pkr;
-        const proPkr = (FROM / 1e8 - price) * COINS * pkr;
-        const proK = Math.round(proPkr / 1000);
-        const target = ((FROM - short) / SPAN) * 100;
+        const proK = Math.round((bag - COST) / 1000);
+        const target = ((short - BUY) / SPAN) * 100;
+        if (short >= SELL && !hitTarget) notify('🎯 Target +100% reached: PEPE ' + short + ' (sell 510)');
+        hitTarget = short >= SELL;
+        const nowAbove = proK >= 10;
+        if (above10k === false && nowAbove) notify('🟢 Pro re-crossed 10k: ' + proK + 'k');
+        above10k = nowAbove;
         const bagK = Math.floor(bag / 1000);
-        const neg = target < 0; // red when Target % negative (short above 510)
-        const emoji = neg ? '🔴' : '🟢';
+        const neg = target < 0; // red when Target % negative (short below 471)
+        const emoji = proK < 0 ? '🔴' : '🟢';
         const targetStr = (target >= 0 ? '+' : '') + target.toFixed(1);
         const text =
           emoji + ' Pro:' + proK + 'k/🎯:' + targetStr + '%\n' +
@@ -96,7 +110,7 @@
         block.textContent = text;
         document.title = 'Pro ' + proK + 'k · PEPE ' + short;
         document.getElementById('meta').innerHTML =
-          'Sell 510 → buy-back 470 (=100%) · Target = (510 − short) / 40 × 100<br>' +
+          'Hold 178,321,500 @ 471 → sell 510 (=100%) · Target = (short − 471) / 39 × 100<br>' +
           'Binance PEPE/USDT ' + price + ' · updated just now';
       } catch (e) {
         err.hidden = false;
@@ -108,7 +122,7 @@
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
     refresh();
-    setInterval(refresh, 1500);
+    setInterval(refresh, 30000);
   </script>
 </body>
 </html>
