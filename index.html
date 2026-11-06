@@ -16,7 +16,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, sans-serif;
-      background: #0b1220; color: #e8eefc; display: flex; align-items: center; justify-content: center;
+      background: #0b1220; color: #e8eefc; display: flex; flex-direction: column; align-items: center; gap: 18px;
       padding: 20px;
     }
     .card {
@@ -31,7 +31,27 @@
     .block.up { color: #3dda8a; }
     .block.down { color: #ff6b6b; }
     .meta { margin-top: 18px; font-size: 12px; line-height: 1.55; color: #7a8ba8; }
+    .sec { width: min(820px, 100%); background: #141c2e; border: 1px solid #2a3550; border-radius: 18px; padding: 18px 16px; }
+    .sec h2 { margin: 0 0 10px; font-size: 15px; color: #9aabc8; text-transform: uppercase; letter-spacing: .04em; }
+    .tw { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border-bottom: 1px solid #2a3550; padding: 4px; text-align: left; }
+    th { color: #9aabc8; font-weight: 600; white-space: nowrap; }
+    td input, td select { width: 100%; min-width: 80px; background: #0b1220; color: #e8eefc; border: 1px solid #2a3550; border-radius: 6px; padding: 6px; font-size: 13px; }
+    button { background: #2a3550; color: #e8eefc; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 8px 6px 0 0; cursor: pointer; }
+    button.del { background: #4a2330; padding: 4px 8px; margin: 0; }
+    .sum div { margin: 4px 0; font-size: 14px; } .note { font-size: 11px; color: #7a8ba8; margin-top: 8px; }
+    #rec { font-size: 16px; font-weight: 700; line-height: 1.5; }
     .err { color: #ff8e8e; font-size: 13px; margin-top: 10px; }
+    .sheet { width: min(720px, 100%); background: #141c2e; border: 1px solid #2a3550; border-radius: 18px; padding: 20px 16px; }
+    .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 10px; margin: 10px 0 14px; }
+    .totals div { background: #0f1626; border: 1px solid #2a3550; border-radius: 12px; padding: 10px; font-size: 12px; color: #9aabc8; }
+    .totals b { display: block; font-size: 18px; color: #3dda8a; margin-top: 4px; }
+    .tw { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid #2a3550; text-align: left; white-space: nowrap; }
+    th { color: #9aabc8; font-weight: 600; }
+    td.pos { color: #3dda8a; }
   </style>
 </head>
 <body>
@@ -41,7 +61,112 @@
     <div class="meta" id="meta">Sold 509 → buy-back 470 (=100%) · Target = (509 − short) / 39 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
     <div class="err" id="err" hidden></div>
   </div>
+  <section class="sec" id="trades">
+    <h2>📒 Trade log — profit / cash (editable)</h2>
+    <div class="tw"><table><thead><tr><th>Date</th><th>Action</th><th>PEPE price (short)</th><th>Amount PKR</th><th>Dollars kept aside</th><th>Coins</th><th>Note</th><th></th></tr></thead><tbody id="tbody"></tbody></table></div>
+    <button id="addRow">+ Add row</button><button id="csvBtn">⬇ Download CSV</button><button id="resetBtn">Reset to history</button>
+    <div class="note">Edits save automatically on this device (localStorage). "est." = estimated PKR.</div>
+  </section>
+  <section class="sec" id="datasheet">
+    <h2>📊 Data sheet / summary</h2>
+    <div class="sum" id="summary"></div>
+  </section>
+  <section class="sec" id="analysis">
+    <h2>🧭 Analysis — buy, sell or wait?</h2>
+    <div id="rec">Waiting for live price…</div>
+    <div class="note">Not financial advice.</div>
+  </section>
   <script>
+    const LS_KEY = 'pepe-trades-v1';
+    const DEFAULT_TRADES = [
+      {date:'2026-10-22',action:'Sell',short:'',pkr:'219000',aside:'',coins:'175807151',note:'Sold at bag PKR 219k; short not recorded'},
+      {date:'2026-10-27 00:35',action:'Buy',short:'432.33',pkr:'211346',aside:'',coins:'176519359',note:'Cost ~PKR 211,346'},
+      {date:'2026-10-28',action:'Sell',short:'495',pkr:'',aside:'',coins:'176519359',note:'Sold entire position'},
+      {date:'2026-10-30',action:'Buy',short:'468',pkr:'',aside:'',coins:'177322500',note:''},
+      {date:'2026-11-04',action:'Sell',short:'510',pkr:'',aside:'',coins:'177322500',note:'~902 USDT proceeds'},
+      {date:'2026-11-05 21:11',action:'Buy',short:'471',pkr:'232332',aside:'',coins:'178321500',note:'Cost ~PKR 232,331.99'},
+      {date:'2026-11-06 14:56',action:'Sell',short:'509',pkr:'251084',aside:'',coins:'178321500',note:'est. @276.63 (~907.66 USDT)'}
+    ];
+    const COLS = ['date','action','short','pkr','aside','coins','note'];
+    let trades;
+    try { trades = JSON.parse(localStorage.getItem(LS_KEY)) || DEFAULT_TRADES.map(t => ({...t})); } catch (e) { trades = DEFAULT_TRADES.map(t => ({...t})); }
+    const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(trades)); } catch (e) {} };
+    const num = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? null : n; };
+    const fmt = n => Math.round(n).toLocaleString('en-US');
+    function renderTable() {
+      const tb = document.getElementById('tbody'); tb.innerHTML = '';
+      trades.forEach((t, i) => {
+        const tr = document.createElement('tr');
+        COLS.forEach(c => {
+          const td = document.createElement('td'); let el;
+          if (c === 'action') { el = document.createElement('select'); ['Buy','Sell'].forEach(o => { const op = document.createElement('option'); op.textContent = o; el.appendChild(op); }); el.value = t.action; }
+          else { el = document.createElement('input'); el.value = t[c] || ''; if (c === 'aside') el.placeholder = '$ kept aside'; if (c === 'pkr') el.placeholder = 'PKR'; }
+          el.addEventListener(c === 'action' ? 'change' : 'input', () => { trades[i][c] = el.value; save(); renderSummary(); renderAnalysis(); });
+          td.appendChild(el); tr.appendChild(td);
+        });
+        const td = document.createElement('td'); const b = document.createElement('button'); b.className = 'del'; b.textContent = '✕';
+        b.onclick = () => { if (confirm('Delete this row?')) { trades.splice(i, 1); save(); renderAll(); } };
+        td.appendChild(b); tr.appendChild(td); tb.appendChild(tr);
+      });
+    }
+    function stats() {
+      const sorted = trades.map((t, i) => ({...t, i})).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.i - b.i);
+      const buys = sorted.filter(t => t.action === 'Buy' && num(t.short) !== null);
+      const sells = sorted.filter(t => t.action === 'Sell' && num(t.short) !== null);
+      const avg = a => a.length ? a.reduce((s, t) => s + num(t.short), 0) / a.length : null;
+      const pairs = []; let open = null;
+      sorted.forEach(t => {
+        if (t.action === 'Buy') open = t;
+        else if (t.action === 'Sell') {
+          if (open && num(open.short) !== null && num(t.short) !== null) {
+            const coins = num(t.coins) || num(open.coins) || 0;
+            pairs.push({ buy: open, sell: t, usd: (num(t.short) - num(open.short)) * 1e-8 * coins, complete: true });
+          } else pairs.push({ sell: t, complete: false });
+          open = null;
+        }
+      });
+      const recent = a => a.slice(-2);
+      return { sorted, buys, sells, avgBuy: avg(buys), avgSell: avg(sells), recBuy: avg(recent(buys)), recSell: avg(recent(sells)), pairs, open, last: sorted[sorted.length - 1] };
+    }
+    function renderSummary() {
+      const s = stats(), fx = window.LIVE_PKR || 278;
+      const done = s.pairs.filter(p => p.complete), totUsd = done.reduce((a, p) => a + p.usd, 0);
+      const pairLines = s.pairs.map(p => p.complete
+        ? `${p.buy.short} → ${p.sell.short}: <b>${p.usd >= 0 ? '+' : ''}$${p.usd.toFixed(2)}</b> (~PKR ${fmt(p.usd * fx)})`
+        : `${p.sell.date} sell: incomplete pair (no recorded buy/price) — skipped`).join('<br>');
+      const dates = s.sorted.map(t => t.date + ' ' + t.action).join(' · ');
+      const last = s.last;
+      document.getElementById('summary').innerHTML =
+        `<div>Trades: <b>${trades.length}</b> (${s.sorted.filter(t => t.action === 'Buy').length} buys, ${s.sorted.filter(t => t.action === 'Sell').length} sells)</div>` +
+        `<div>Dates: ${dates}</div>` +
+        `<div>Completed buy→sell pairs:<br>${pairLines || '—'}</div>` +
+        `<div>Total P/L (completed pairs): <b>${totUsd >= 0 ? '+' : ''}$${totUsd.toFixed(2)}</b> ≈ PKR ${fmt(totUsd * fx)} <span class="note">(PKR at live rate ${fx.toFixed(2)})</span></div>` +
+        `<div>Avg buy: <b>${s.avgBuy ? s.avgBuy.toFixed(1) : '—'}</b> · Avg sell: <b>${s.avgSell ? s.avgSell.toFixed(1) : '—'}</b> · Recent (last 2) buy ${s.recBuy ? s.recBuy.toFixed(1) : '—'} / sell ${s.recSell ? s.recSell.toFixed(1) : '—'}</div>` +
+        `<div>Pattern: repeated short-cycle scalps — buy in the 430–471 zone (lately ~468–471), sell in the 495–510 zone (lately 509–510). ` +
+        (last && last.action === 'Sell' ? `Last action: sold at ${last.short || '?'} on ${last.date}; now waiting to buy back near ${BUYBACK}.` : `Last action: bought at ${last ? last.short : '?'}; holding for the sell zone.`) + `</div>`;
+    }
+    function renderAnalysis() {
+      const s = stats(), live = window.LIVE_SHORT, el = document.getElementById('rec');
+      if (!live) { el.textContent = 'Waiting for live price…'; return; }
+      const sellRef = s.recSell, buyRef = s.recBuy;
+      const lastSell = s.last && s.last.action === 'Sell';
+      let txt;
+      if (sellRef && live > sellRef) txt = (lastSell ? `⏸️ WAIT (already sold). ` : `🔴 Consider SELL. `) + `Live ${live} is above your recent average sell ${sellRef.toFixed(0)}` + (lastSell ? ` — you already sold at ${s.last.short}; keep waiting for ${BUYBACK}.` : `, the zone where you usually take profit.`);
+      else if (buyRef && live < buyRef) txt = `🟢 Consider BUY. Live ${live} is below your recent average buy ${buyRef.toFixed(0)}` + (lastSell ? ` and you're in cash after selling at ${s.last.short} — near your ${BUYBACK} buy-back target.` : `.`);
+      else txt = `⏸️ WAIT. Live ${live} is between your recent avg buy ${buyRef ? buyRef.toFixed(0) : '—'} and avg sell ${sellRef ? sellRef.toFixed(0) : '—'}` + (lastSell ? `; you sold at ${s.last.short}, so the recorded pattern is to wait for the buy-back target ${BUYBACK} (${live - BUYBACK} points away).` : `; hold until the sell zone.`);
+      el.textContent = txt;
+    }
+    function renderAll() { renderTable(); renderSummary(); renderAnalysis(); }
+    document.getElementById('addRow').onclick = () => { trades.push({date: new Date().toISOString().slice(0, 10), action: 'Buy', short: window.LIVE_SHORT || '', pkr: '', aside: '', coins: '', note: ''}); save(); renderAll(); };
+    document.getElementById('resetBtn').onclick = () => { if (confirm('Reset table to recorded history? Your edits will be lost.')) { trades = DEFAULT_TRADES.map(t => ({...t})); save(); renderAll(); } };
+    document.getElementById('csvBtn').onclick = () => {
+      const head = ['Date','Action','PEPE short','PEPE USD','Amount PKR','Dollars kept aside','Coins','Note'];
+      const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+      const rows = trades.map(t => [t.date, t.action, t.short, num(t.short) !== null ? (num(t.short) * 1e-8).toFixed(10) : '', t.pkr, t.aside, t.coins, t.note].map(q).join(','));
+      const blob = new Blob([[head.join(','), ...rows].join('\n')], {type: 'text/csv'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'pepe-trades.csv'; a.click();
+    };
+    renderAll();
     const COINS = 178321500;
     const SOLD = 509;
     const BUYBACK = 470;
@@ -89,6 +214,7 @@
       try {
         const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
         const short = Math.round(price * 1e8);
+        window.LIVE_SHORT = short; window.LIVE_PKR = pkr; try { renderAnalysis(); renderSummary(); } catch (e) {}
         const bag = COINS * price * pkr;
         const proPkr = (SOLD_PRICE - price) * COINS * pkr;
         const proK = Math.round(proPkr / 1000);
