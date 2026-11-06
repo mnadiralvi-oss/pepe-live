@@ -36,17 +36,17 @@
 </head>
 <body>
   <div class="card">
-    <h1>PEPE live · hold</h1>
+    <h1>PEPE live · buy-back</h1>
     <pre class="block up" id="block">Loading…</pre>
-    <div class="meta" id="meta">Hold 178,321,500 @ 471 → sell 510 (=100%) · Target = (short − 471) / 39 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
+    <div class="meta" id="meta">Sold 509 → buy-back 470 (=100%) · Target = (509 − short) / 39 × 100<br>Auto-refresh · Binance PEPE/USDT</div>
     <div class="err" id="err" hidden></div>
   </div>
   <script>
     const COINS = 178321500;
-    const BUY = 471;
-    const SELL = 510;
-    const SPAN = SELL - BUY; // 39
-    const COST = 232331.99;
+    const SOLD = 509;
+    const BUYBACK = 470;
+    const SPAN = SOLD - BUYBACK; // 39
+    const SOLD_PRICE = 0.00000509;
     let hitTarget = false, above10k = null;
     function notify(msg) {
       try {
@@ -90,15 +90,16 @@
         const [price, pkr] = await Promise.all([fetchPrice(), fetchPkr()]);
         const short = Math.round(price * 1e8);
         const bag = COINS * price * pkr;
-        const proK = Math.round((bag - COST) / 1000);
-        const target = ((short - BUY) / SPAN) * 100;
-        if (short >= SELL && !hitTarget) notify('🎯 Target +100% reached: PEPE ' + short + ' (sell 510)');
-        hitTarget = short >= SELL;
+        const proPkr = (SOLD_PRICE - price) * COINS * pkr;
+        const proK = Math.round(proPkr / 1000);
+        const target = ((SOLD - short) / SPAN) * 100;
+        if (short <= BUYBACK && !hitTarget) notify('🎯 Target +100%: PEPE ' + short + ' — buy back now (470)');
+        hitTarget = short <= BUYBACK;
         const nowAbove = proK >= 10;
         if (above10k === false && nowAbove) notify('🟢 Pro re-crossed 10k: ' + proK + 'k');
         above10k = nowAbove;
         const bagK = Math.floor(bag / 1000);
-        const neg = target < 0; // red when Target % negative (short below 471)
+        const neg = target < 0; // red when Target % negative (short above 509)
         const emoji = proK < 0 ? '🔴' : '🟢';
         const targetStr = (target >= 0 ? '+' : '') + target.toFixed(1);
         const text =
@@ -110,7 +111,7 @@
         block.textContent = text;
         document.title = 'Pro ' + proK + 'k · PEPE ' + short;
         document.getElementById('meta').innerHTML =
-          'Hold 178,321,500 @ 471 → sell 510 (=100%) · Target = (short − 471) / 39 × 100<br>' +
+          'Sold 509 → buy-back 470 (=100%) · Target = (509 − short) / 39 × 100<br>' +
           'Binance PEPE/USDT ' + price + ' · updated just now';
       } catch (e) {
         err.hidden = false;
